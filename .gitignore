@@ -1,0 +1,24 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# OS/IDE configs
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Large raw experimental files (keep only final frontier results in Git)
+results/02_High_Density_Colliding/
+results/03_Experimental_Archive/
+results/paper_figures/
+*.zip
+*.tar.gz

@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAGE 3D Visualizer Dashboard</title>
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --panel-bg: rgba(17, 24, 39, 0.75);
+            --accent-color: #3b82f6;
+            --accent-glow: #1d4ed8;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            padding: 20px;
+        }
+
+        .interactive {
+            pointer-events: auto;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            background: var(--panel-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 340px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+            max-height: 95vh;
+            overflow-y: auto;
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.025em;
+        }
+
+        .subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 5px;
+        }
+
+        select {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 12px;
+            border-radius: 8px;
+            width: 100%;
+            outline: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        select option {
+            background: #111827;
+            color: var(--text-color);
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 10px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-active {
+            background: var(--accent-color);
+            border-color: var(--accent-color);
+        }
+
+        .btn-grid-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .stats-container {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .stat-box {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-val {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent-color);
+        }
+
+        .stat-lbl {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* Loading Spinner */
+        #loader {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 100;
+            pointer-events: none;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(59, 130, 246, 0.1);
+            border-radius: 50%;
+            border-top-color: var(--accent-color);
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+    <!-- Three.js and plugins -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div id="loader">
+        <div class="spinner"></div>
+        <p style="text-shadow: 0 2px 10px black; font-weight: 600;">Loading Model...</p>
+    </div>
+
+    <div class="ui-layer">
+        <!-- Controls Sidebar -->
+        <div class="control-panel interactive">
+            <div>
+                <h1>SAGE 3D</h1>
+                <div class="subtitle">Analytical Packing Dashboard</div>
+            </div>
+
+            <!-- Model Selection Dropdown -->
+            <div class="control-group">
+                <label for="model-select">Select Simulation File</label>
+                <select id="model-select">
+                    <option value="">-- Choose a Model --</option>
+                </select>
+            </div>
+
+            <!-- Stats -->
+            <div class="control-group">
+                <label>Packing Diagnostics</label>
+                <div class="stats-container">
+                    <div class="stat-box">
+                        <span class="stat-val" id="stat-count">-</span>
+                        <span class="stat-lbl">Units Count</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-val" id="stat-vol">-</span>
+                        <span class="stat-lbl">Density Est.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preset Cameras -->
+            <div class="control-group">
+                <label>Camera Presets</label>
+                <div class="btn-grid-layout">
+                    <button class="btn" onclick="setCamera('front')">Front</button>
+                    <button class="btn" onclick="setCamera('side')">Side</button>
+                    <button class="btn" onclick="setCamera('top')">Top</button>
+                    <button class="btn" onclick="setCamera('iso')">Isometric</button>
+                </div>
+            </div>
+
+            <!-- Visibility Controls -->
+            <div class="control-group">
+                <label>Bounds & Helpers</label>
+                <button class="btn btn-active" id="btn-container">ISO 20ft Container</button>
+                <button class="btn" id="btn-grid">Ground Grid Plane</button>
+            </div>
+
+            <div class="control-group">
+                <label>Dynamics</label>
+                <button class="btn" id="btn-rotate">Auto Spin Camera</button>
+            </div>
+
+            <!-- Snapshot Exporter -->
+            <div class="control-group">
+                <label>Academic Publication Tools</label>
+                <button class="btn" id="btn-snapshot" style="background: rgba(139, 92, 246, 0.2); border-color: rgba(139, 92, 246, 0.4);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                    Export Clean Render (PNG)
+                </button>
+            </div>
+
+            <div style="flex-grow: 1;"></div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+                SAGE Solver Visualization Suite
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Scene & Renderer Setup ---
+        const container = document.getElementById('canvas-container');
+        const loaderEl = document.getElementById('loader');
+        
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0b0f19);
+        scene.fog = new THREE.FogExp2(0x0b0f19, 0.012);
+
+        const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(9, 6, 11);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05; 
+
+        // --- 2. Lighting ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.95);
+        dirLight1.position.set(12, 24, 12);
+        dirLight1.castShadow = true;
+        dirLight1.shadow.mapSize.width = 2048;
+        dirLight1.shadow.mapSize.height = 2048;
+        dirLight1.shadow.bias = -0.0001;
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0x3b82f6, 0.4);
+        dirLight2.position.set(-12, 6, -12);
+        scene.add(dirLight2);
+
+        // --- 3. Boundary & Grid Helpers ---
+        // Container: 5.898 x 2.352 x 2.393
+        const cDims = { x: 5.898, y: 2.352, z: 2.393 };
+        const boxGeometry = new THREE.BoxGeometry(cDims.x, cDims.y, cDims.z);
+        const boxEdges = new THREE.EdgesGeometry(boxGeometry);
+        const boxLine = new THREE.LineSegments(
+            boxEdges,
+            new THREE.LineBasicMaterial({ color: 0x3b82f6, linewidth: 2, transparent: true, opacity: 0.7 })
+        );
+        boxLine.position.set(cDims.x / 2, cDims.y / 2, cDims.z / 2);
+        scene.add(boxLine);
+
+        const gridHelper = new THREE.GridHelper(30, 30, 0x3b82f6, 0x1e293b);
+        gridHelper.material.opacity = 0.35;
+        gridHelper.material.transparent = true;
+        gridHelper.visible = false;
+        scene.add(gridHelper);
+
+        const floorGeo = new THREE.PlaneGeometry(50, 50);
+        const floorMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        scene.add(floor);
+
+        // --- 4. Model Loading Logic ---
+        let currentModel = null;
+        const gltfLoader = new THREE.GLTFLoader();
+
+        function loadModel(filePath) {
+            loaderEl.style.display = 'flex';
+            if (currentModel) {
+                scene.remove(currentModel);
+            }
+
+            gltfLoader.load(
+                filePath,
+                (gltf) => {
+                    currentModel = gltf.scene;
+                    
+                    let meshCount = 0;
+                    currentModel.traverse((child) => {
+                        if (child.isMesh) {
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+                            
+                            if (child.material) {
+                                child.material.roughness = 0.45;
+                                child.material.metalness = 0.25;
+                                child.material.side = THREE.DoubleSide;
+                            }
+                            meshCount++;
+                        }
+                    });
+
+                    scene.add(currentModel);
+                    document.getElementById('stat-count').innerText = meshCount;
+                    
+                    // Estimate volumetric packing density
+                    const singleVolume = 0.1047; // standard 1-ton tetrapod volume in m3
+                    const containerVolume = cDims.x * cDims.y * cDims.z;
+                    const density = ((meshCount * singleVolume) / containerVolume * 100).toFixed(1);
+                    document.getElementById('stat-vol').innerText = `${density}%`;
+
+                    // Focus camera
+                    const box = new THREE.Box3().setFromObject(currentModel);
+                    const center = box.getCenter(new THREE.Vector3());
+                    controls.target.copy(center);
+                    
+                    loaderEl.style.display = 'none';
+                },
+                undefined,
+                (error) => {
+                    console.error('Loader Error:', error);
+                    loaderEl.style.display = 'none';
+                }
+            );
+        }
+
+        // --- 5. Populate Dropdown via API ---
+        async function fetchModels() {
+            try {
+                const response = await fetch('/api/files');
+                const data = await response.json();
+                const select = document.getElementById('model-select');
+                
+                // Group by folders
+                for (const [folder, files] of Object.entries(data)) {
+                    if (files.length === 0) continue;
+                    const group = document.createElement('optgroup');
+                    group.label = folder;
+                    
+                    files.forEach(file => {
+                        const opt = document.createElement('option');
+                        opt.value = file.path;
+                        opt.innerText = file.name;
+                        group.appendChild(opt);
+                    });
+                    select.appendChild(group);
+                }
+            } catch (err) {
+                console.error("Failed to load models list from server:", err);
+            }
+        }
+
+        document.getElementById('model-select').addEventListener('change', (e) => {
+            if (e.target.value) {
+                loadModel(e.target.value);
+            }
+        });
+
+        // --- 6. Controls & Camera Presets ---
+        function setCamera(preset) {
+            const target = new THREE.Vector3(cDims.x / 2, cDims.y / 2, cDims.z / 2);
+            controls.target.copy(target);
+            
+            if (preset === 'front') {
+                camera.position.set(cDims.x / 2, cDims.y / 2, 11);
+            } else if (preset === 'side') {
+                camera.position.set(11, cDims.y / 2, cDims.z / 2);
+            } else if (preset === 'top') {
+                camera.position.set(cDims.x / 2, 11, cDims.z / 2);
+            } else if (preset === 'iso') {
+                camera.position.set(cDims.x * 1.5, cDims.y * 2.5, cDims.z * 2);
+            }
+            camera.lookAt(target);
+        }
+
+        const btnContainer = document.getElementById('btn-container');
+        btnContainer.addEventListener('click', () => {
+            boxLine.visible = !boxLine.visible;
+            btnContainer.classList.toggle('btn-active', boxLine.visible);
+        });
+
+        const btnGrid = document.getElementById('btn-grid');
+        btnGrid.addEventListener('click', () => {
+            gridHelper.visible = !gridHelper.visible;
+            btnGrid.classList.toggle('btn-active', gridHelper.visible);
+        });
+
+        let autoRotate = false;
+        const btnRotate = document.getElementById('btn-rotate');
+        btnRotate.addEventListener('click', () => {
+            autoRotate = !autoRotate;
+            btnRotate.classList.toggle('btn-active', autoRotate);
+        });
+
+        // --- 7. Snapshot Exporter ---
+        const btnSnapshot = document.getElementById('btn-snapshot');
+        btnSnapshot.addEventListener('click', () => {
+            // Hide container helper for a clean export if desired, or keep it.
+            // Temporarily set render background transparent or white
+            const oldBg = scene.background;
+            scene.background = null; 
+            
+            renderer.render(scene, camera);
+            
+            const dataURL = renderer.domElement.toDataURL('image/png');
+            
+            const link = document.createElement('a');
+            link.download = 'SAGE_3D_Render.png';
+            link.href = dataURL;
+            link.click();
+            
+            scene.background = oldBg; // Restore background
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- 8. Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+
+            if (autoRotate && currentModel) {
+                currentModel.rotation.y += 0.0035;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize
+        fetchModels();
+        animate();
+    </script>
+</body>
+</html>
